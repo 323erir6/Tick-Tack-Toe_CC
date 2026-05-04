@@ -1,0 +1,8 @@
+{
+  "name": "tictactoe-relay",
+  "version": "1.0.0",
+  "description": "WebSocket relay for Tic-Tac-Toe CC:Tweaked",
+  "dependencies": {
+    "ws": "^8.13.0"
+  }
+}
