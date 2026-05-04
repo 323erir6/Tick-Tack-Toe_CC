@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<title>Хрестики-нулики – CC:Tweaked</title>
+<style>
+  body { font-family: sans-serif; text-align: center; background: #111; color: #eee; }
+  #board { display: grid; grid-template-columns: repeat(3, 1fr); width: 330px; margin: 20px auto; }
+  .cell { width: 100px; height: 100px; border: 2px solid #aaa; font-size: 60px; line-height: 100px; cursor: pointer; }
+  .cell:hover { background: #333; }
+  #status { font-size: 24px; margin: 10px; }
+  #sessions button { display: block; margin: 5px auto; padding: 8px 20px; }
+</style>
+</head>
+<body>
+  <h1>Хрестики-нулики (Online)</h1>
+  <div id="status">Підключення...</div>
+  <div id="sessions"></div>
+  <div id="board" style="display:none">
+    <div class="cell" data-id="1"></div>
+    <div class="cell" data-id="2"></div>
+    <div class="cell" data-id="3"></div>
+    <div class="cell" data-id="4"></div>
+    <div class="cell" data-id="5"></div>
+    <div class="cell" data-id="6"></div>
+    <div class="cell" data-id="7"></div>
+    <div class="cell" data-id="8"></div>
+    <div class="cell" data-id="9"></div>
+  </div>
+
+  <script>
+    // ЗАМІНИТИ!
+    const RELAY_URL = 'wss://your-project.glitch.me';
+    let ws, myMark = null, board = Array(9).fill(' '), gameOver = false;
+
+    const statusDiv = document.getElementById('status');
+    const sessionsDiv = document.getElementById('sessions');
+    const boardDiv = document.getElementById('board');
+
+    function connect() {
+        ws = new WebSocket(RELAY_URL);
+        ws.onopen = () => {
+            statusDiv.textContent = 'Очікування списку сесій...';
+            ws.send(JSON.stringify({type:'list'}));
+        };
+        ws.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            handleMessage(msg);
+        };
+        ws.onclose = () => {
+            statusDiv.textContent = 'З’єднання втрачено';
+            hideBoard();
+        };
+    }
+
+    function handleMessage(msg) {
+        switch(msg.type) {
+            case 'session_list':
+                showSessions(msg.sessions);
+                break;
+            case 'start':
+                myMark = msg.mark;
+                statusDiv.textContent = `Ви граєте за ${myMark}`;
+                hideSessions();
+                showBoard();
+                break;
+            case 'move':
+                board[msg.pos - 1] = myMark === 'X' ? 'O' : 'X';
+                renderBoard();
+                checkGameOver(board[msg.pos - 1]);
+                break;
+            case 'opponent_left':
+                statusDiv.textContent = 'Опонент покинув гру';
+                gameOver = true;
+                renderBoard();
+                break;
+            case 'error':
+                alert(msg.message);
+                break;
+        }
+    }
+
+    function showSessions(sessions) {
+        sessionsDiv.innerHTML = '<h3>Доступні сесії</h3>';
+        if (sessions.length === 0) {
+            sessionsDiv.innerHTML += '<p>Немає активних сесій</p>';
+        } else {
+            sessions.forEach(key => {
+                const btn = document.createElement('button');
+                btn.textContent = 'Приєднатися до ' + key;
+                btn.onclick = () => {
+                    ws.send(JSON.stringify({type:'join', key}));
+                };
+                sessionsDiv.appendChild(btn);
+            });
+        }
+    }
+
+    function hideSessions() { sessionsDiv.style.display = 'none'; }
+    function showSessions() { sessionsDiv.style.display = 'block'; }
+
+    function showBoard() {
+        boardDiv.style.display = 'grid';
+        renderBoard();
+        document.querySelectorAll('.cell').forEach(cell => {
+            cell.onclick = () => {
+                if (gameOver) return;
+                const idx = parseInt(cell.dataset.id) - 1;
+                if (board[idx] !== ' ') return;
+                if (myMark === 'O') { // joiner's turn only when it's O's move
+                    ws.send(JSON.stringify({type:'move', pos: idx+1}));
+                    board[idx] = myMark;
+                    renderBoard();
+                    checkGameOver(myMark);
+                }
+            };
+        });
+    }
+
+    function hideBoard() {
+        boardDiv.style.display = 'none';
+        gameOver = false;
+    }
+
+    function renderBoard() {
+        const cells = document.querySelectorAll('.cell');
+        cells.forEach((cell, i) => {
+            cell.textContent = board[i] === ' ' ? '' : board[i];
+        });
+    }
+
+    function checkGameOver(mark) {
+        const wins = [
+            [0,1,2],[3,4,5],[6,7,8],
+            [0,3,6],[1,4,7],[2,5,8],
+            [0,4,8],[2,4,6]
+        ];
+        const won = wins.some(w => w.every(i => board[i] === mark));
+        if (won) {
+            statusDiv.textContent = `Гравець ${mark} переміг!`;
+            gameOver = true;
+        } else if (board.every(c => c !== ' ')) {
+            statusDiv.textContent = 'Нічия!';
+            gameOver = true;
+        }
+    }
+
+    connect();
+  </script>
+</body>
+</html>
