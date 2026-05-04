@@ -2,8 +2,7 @@
 const WebSocket = require('ws');
 const wss = new WebSocket.Server({ port: process.env.PORT || 3000 });
 
-// Session storage: key -> { creator, joiner }
-const sessions = {};
+const sessions = {}; // key -> { creator, joiner }
 
 wss.on('connection', (ws) => {
     ws.on('message', (raw) => {
@@ -17,7 +16,7 @@ wss.on('connection', (ws) => {
                     return;
                 }
                 sessions[msg.key] = { creator: ws, joiner: null };
-                ws.sessionKey = msg.key;  // remember for cleanup
+                ws.sessionKey = msg.key;
                 broadcastSessionList();
                 break;
 
@@ -29,14 +28,12 @@ wss.on('connection', (ws) => {
                 }
                 session.joiner = ws;
                 ws.sessionKey = msg.key;
-                // Tell both players to start
                 session.creator.send(JSON.stringify({type:'start', mark:'X'}));
                 session.joiner.send(JSON.stringify({type:'start', mark:'O'}));
                 broadcastSessionList();
                 break;
 
             case 'move':
-                // Relay move to opponent
                 const key = ws.sessionKey;
                 if (!key || !sessions[key]) return;
                 const opponent = (sessions[key].creator === ws) ? sessions[key].joiner : sessions[key].creator;
@@ -52,7 +49,6 @@ wss.on('connection', (ws) => {
     });
 
     ws.on('close', () => {
-        // Cleanup session
         if (ws.sessionKey && sessions[ws.sessionKey]) {
             const s = sessions[ws.sessionKey];
             const opponent = (s.creator === ws) ? s.joiner : s.creator;
